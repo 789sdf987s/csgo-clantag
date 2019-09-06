@@ -33,7 +33,8 @@ DWORD __stdcall MainThread(LPVOID lpThreadParameter)
 	_GetModuleFileNameA(NULL, filename, MAX_PATH);
 
 	// make sure we're actually injected @ csgo
-	if (std::string(filename).find(strenc("\\Steam\\steamapps\\common\\Counter-Strike Global Offensive\\csgo.exe")) == std::string::npos)
+	if (std::string(filename).find(strenc("\\steamapps\\")) == std::string::npos
+	 || std::string(filename).find(strenc("\\Counter-Strike Global Offensive\\")) == std::string::npos)
 	{
 		ExitCheat();
 	}
