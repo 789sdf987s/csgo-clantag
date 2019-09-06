@@ -44,15 +44,15 @@ DWORD __stdcall MainThread(LPVOID lpThreadParameter)
 		_Sleep(100);
 	}
 
-	const win::LDR_DATA_TABLE_ENTRY_T* engine = utils::GetModuleEntry(hash("engine.dll"));
+	const win::LDR_DATA_TABLE_ENTRY_T* engineEntry = utils::GetModuleEntry(hash("engine.dll"));
 
-	if (!engine)
+	if (!engineEntry)
 	{
 		ExitCheat();
 	}
 
-	unsigned long dwInterfaceList = utils::ModulePatternScan(engine, charenc("8B 35 ? ? ? ? 57 85 F6 74 38 8B 7D 08"));
-	SendClantagChanged            = (SendClantagChangedFn)utils::ModulePatternScan(engine, charenc("53 56 57 8B DA 8B F9 FF"));
+	unsigned long dwInterfaceList = utils::ModulePatternScan(engineEntry, charenc("8B 35 ? ? ? ? 57 85 F6 74 38 8B 7D 08"));
+	SendClantagChanged            = (SendClantagChangedFn)utils::ModulePatternScan(engineEntry, charenc("53 56 57 8B DA 8B F9 FF"));
 
 	if (!dwInterfaceList || !SendClantagChanged)
 	{
