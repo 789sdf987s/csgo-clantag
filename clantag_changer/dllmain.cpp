@@ -78,7 +78,7 @@ DWORD __stdcall MainThread(LPVOID lpThreadParameter)
 
 	constexpr size_t ct_count = 14;
 
-	const char clantag[]         = { "eternity.cc" };
+	const char clantag[]         = { "me!me!me!" };
 	char       buffer[ct_count + 1] = { 0 }; // max clantag length
 
 	constexpr size_t length = sizeof(clantag) - 1;
@@ -109,7 +109,7 @@ DWORD __stdcall MainThread(LPVOID lpThreadParameter)
 			next = _GetTickCount() + 300;
 		}
 
-		_Sleep(1);
+		_Sleep(10);
 	}
 
 	return NULL;
