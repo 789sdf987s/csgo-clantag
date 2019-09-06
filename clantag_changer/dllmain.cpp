@@ -47,6 +47,8 @@ DWORD __stdcall MainThread(LPVOID lpThreadParameter)
 		_Sleep(100);
 	}
 
+	_Sleep(100);
+
 	const win::LDR_DATA_TABLE_ENTRY_T* clientEntry = utils::GetModuleEntry(hash("client_panorama.dll"));
 	const win::LDR_DATA_TABLE_ENTRY_T* engineEntry = utils::GetModuleEntry(hash("engine.dll"));
 

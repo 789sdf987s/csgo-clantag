@@ -10,5 +10,4 @@ how2 change clantag:
 
 max. characters is 14. more than that, the rest will be ignored.
 
-if clantag.txt doesnt exist, simply create one.
-the file is automatically generated upon injecting.
+if clantag.txt doesnt exist, simply create one. the file is automatically generated upon injecting.
