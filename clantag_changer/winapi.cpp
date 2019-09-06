@@ -33,6 +33,7 @@ void* _getImportFuncSafe(hashed_string importFuncName)
 DEFINE_IMPORT_FN(CreateThread);
 DEFINE_IMPORT_FN(DisableThreadLibraryCalls);
 DEFINE_IMPORT_FN(FreeLibraryAndExitThread);
+DEFINE_IMPORT_FN(ExitThread);
 
 DEFINE_IMPORT_FN(GetModuleFileNameA);
 DEFINE_IMPORT_FN(GetModuleHandleA);

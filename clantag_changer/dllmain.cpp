@@ -10,13 +10,16 @@
 using SendClantagChangedFn = void(__fastcall*)(const char*, const char*);
 using Engine_IsInGameFn    = bool(__fastcall*)(void*);
 
-HMODULE g_dll    = nullptr;
-void*   g_engine = nullptr;
+HMODULE g_dll         = nullptr;
+void*   g_engine      = nullptr;
+void**  g_localplayer = nullptr;
 
 __forceinline void ExitCheat()
 {
 	if (g_dll)
-		FreeLibraryAndExitThread(g_dll, 0);
+		_FreeLibraryAndExitThread(g_dll, 0);
+	else
+		_ExitThread();
 }
 
 DWORD __stdcall MainThread(LPVOID lpThreadParameter)
@@ -44,24 +47,28 @@ DWORD __stdcall MainThread(LPVOID lpThreadParameter)
 		_Sleep(100);
 	}
 
+	const win::LDR_DATA_TABLE_ENTRY_T* clientEntry = utils::GetModuleEntry(hash("client_panorama.dll"));
 	const win::LDR_DATA_TABLE_ENTRY_T* engineEntry = utils::GetModuleEntry(hash("engine.dll"));
 
-	if (!engineEntry)
+	if (!clientEntry || !engineEntry)
 	{
 		ExitCheat();
 	}
 
-	unsigned long dwInterfaceList = utils::ModulePatternScan(engineEntry, charenc("8B 35 ? ? ? ? 57 85 F6 74 38 8B 7D 08"));
-	SendClantagChanged            = (SendClantagChangedFn)utils::ModulePatternScan(engineEntry, charenc("53 56 57 8B DA 8B F9 FF"));
+	DWORD dwLocalPlayer   = utils::ModulePatternScan(clientEntry, charenc("8B 0D ? ? ? ? 83 FF FF 74 07"));
+	DWORD dwInterfaceList = utils::ModulePatternScan(engineEntry, charenc("8B 35 ? ? ? ? 57 85 F6 74 38 8B 7D 08"));
 
-	if (!dwInterfaceList || !SendClantagChanged)
+	SendClantagChanged = (SendClantagChangedFn)utils::ModulePatternScan(engineEntry, charenc("53 56 57 8B DA 8B F9 FF"));
+
+	if (!dwLocalPlayer || !dwInterfaceList || !SendClantagChanged)
 	{
 		ExitCheat();
 	}
 
-	g_engine = utils::GetInterface(dwInterfaceList + 2, hash("VEngineClient0"), 14);
+	g_engine      = utils::GetInterface(dwInterfaceList + 2, hash("VEngineClient0"), 14);
+	g_localplayer = *(void***)(dwLocalPlayer + 2);
 
-	if(!g_engine)
+	if(!g_engine || !g_localplayer)
 	{
 		ExitCheat();
 	}
@@ -73,40 +80,97 @@ DWORD __stdcall MainThread(LPVOID lpThreadParameter)
 		ExitCheat();
 	}
 
+	size_t pos = 0;
+	long last = strlen(filename);
+
+	for (long i = last; i >= 0; --i)
+	{
+		if (filename[i] == '\\')
+		{
+			pos = i;
+			break;
+		}
+	}
+
+	const char clantag[14] = { "me!me!me!" };
+
+	if (pos)
+	{
+		std::string config = std::string(filename).substr(0, pos);
+		config.assign(charenc("clantag.txt"));
+
+		FILE* file = fopen(config.c_str(), "r");
+
+		if (file)
+		{
+			char buf[14] = { 0 };
+
+			fread((void*)buf, 1, 13, file);
+			fclose(file);
+
+			if (strlen(buf))
+				memcpy((void*)clantag, buf, 14);
+		}
+		else
+		{
+			FILE* f = fopen(config.c_str(), "w");
+			if (f)
+			{
+				fputs(clantag, f);
+				fclose(f);
+			}
+		}
+	}
+
 	DWORD  next  = 0;
 	size_t index = 0;
 
 	constexpr size_t ct_count = 14;
 
-	const char clantag[]         = { "me!me!me!" };
-	char       buffer[ct_count + 1] = { 0 }; // max clantag length
+	char buffer[ct_count + 1] = { 0 }; // max clantag length
 
-	constexpr size_t length = sizeof(clantag) - 1;
-	constexpr size_t count  = 14 + length;
+	size_t length = strlen(clantag);
+	size_t count  = 14 + length;
 
 	for (;;)
 	{
-		if (Engine_IsInGame(g_engine) && _GetTickCount() > next)
+		if (Engine_IsInGame(g_engine) && *g_localplayer)
 		{
-			long amt = (ct_count - 1) - index;
-
-			for (long i = 0; i != ct_count; ++i)
+			if (GetAsyncKeyState(VK_DELETE))
 			{
-				if (i > amt && i <= amt + length)
-					buffer[i] = clantag[i - amt - 1];
-				else
-					buffer[i] = ' ';
+				char empty = '\0';
+				SendClantagChanged(&empty, &empty);
+
+				ExitCheat();
 			}
 
-			SendClantagChanged(buffer, clantag);
-			++index;
-
-			if (index > count)
+			if (_GetTickCount() > next)
 			{
-				index = 0;
-			}
+				long amt = (ct_count - 1) - index;
 
-			next = _GetTickCount() + 300;
+				for (long i = 0; i != ct_count; ++i)
+				{
+					if (i > amt && i <= amt + length)
+						buffer[i] = clantag[i - amt - 1];
+					else
+						buffer[i] = ' ';
+				}
+
+				SendClantagChanged(buffer, clantag);
+				++index;
+
+				if (index > count)
+				{
+					index = 0;
+				}
+
+				next = _GetTickCount() + 300;
+			}
+		}
+		else
+		{
+			if (GetAsyncKeyState(VK_DELETE))
+				ExitCheat();
 		}
 
 		_Sleep(10);
