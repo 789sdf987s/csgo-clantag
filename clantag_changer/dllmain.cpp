@@ -19,7 +19,7 @@ __forceinline void ExitCheat()
 	if (g_dll)
 		_FreeLibraryAndExitThread(g_dll, 0);
 	else
-		_ExitThread();
+		_ExitThread(0);
 }
 
 DWORD __stdcall MainThread(LPVOID lpThreadParameter)
@@ -99,7 +99,8 @@ DWORD __stdcall MainThread(LPVOID lpThreadParameter)
 		std::string config = std::string(filename).substr(0, pos);
 		config.assign(charenc("clantag.txt"));
 
-		FILE* file = fopen(config.c_str(), "r");
+		FILE* file = nullptr;
+		fopen_s(&file, config.c_str(), "r");
 
 		if (file)
 		{
@@ -113,7 +114,8 @@ DWORD __stdcall MainThread(LPVOID lpThreadParameter)
 		}
 		else
 		{
-			FILE* f = fopen(config.c_str(), "w");
+			FILE* f = nullptr;
+			fopen_s(&f, config.c_str(), "w");
 			if (f)
 			{
 				fputs(clantag, f);
