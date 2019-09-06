@@ -139,7 +139,7 @@ DWORD __stdcall MainThread(LPVOID lpThreadParameter)
 
 	for (;;)
 	{
-		if (Engine_IsInGame(g_engine) && *g_localplayer)
+		if (Engine_IsInGame(g_engine)) // && *g_localplayer)
 		{
 			if (GetAsyncKeyState(VK_DELETE))
 			{
