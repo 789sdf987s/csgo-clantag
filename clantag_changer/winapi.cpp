@@ -1,6 +1,5 @@
 #include "winapi.h"
 #include "utils.h"
-#include <string>
 
 void* _getImportFuncSafe(hashed_string importFuncName)
 {
