@@ -142,11 +142,16 @@ void LoadOrCreateConfig(const char* configName)
 		for (const auto& tag : clantags)
 		{
 			size_t index = tag.find(':');
-			if (index)
+			if (index != tag.length())
 			{
 				clantag_t ct;
-				ct.tag  = tag.substr(0, index);
-				ct.time = std::stoul(tag.substr(index));
+				ct.tag    = tag.substr(0, index);
+				auto time = tag.substr(index + 1);
+
+				if (!time.empty())
+					ct.time = std::stoul(time);
+				else
+					ct.time = 0;
 
 				g_clantags.emplace_back(ct);
 			}
