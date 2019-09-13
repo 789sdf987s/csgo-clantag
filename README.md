@@ -2,7 +2,7 @@ how2use: inject clantag_changer.dll and done.
 
 features:
 1. rage uninject on DEL key.
-2. customizable custom clantag (currently marquee style only).
+2. customizable custom clantag.
 
 how2 change clantag:
 1. go to CSGO folder.
