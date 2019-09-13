@@ -4,6 +4,12 @@
 #include "utils.h"
 #include "winapi.h"
 
+struct clantag_t
+{
+	std::string tag;
+	size_t time;
+};
+
 using SendClantagChangedFn = void(__fastcall*)(const char*, const char*);
 using Engine_IsInGameFn    = bool(__fastcall*)(void*);
 
@@ -14,7 +20,7 @@ HMODULE g_dll         = nullptr;
 byte*   g_engine      = nullptr;
 byte**  g_localplayer = nullptr;
 
-std::vector<std::string> g_clantags;
+std::vector<clantag_t> g_clantags;
 
 void ExitCheat()
 {
@@ -112,6 +118,8 @@ void LoadOrCreateConfig(const char* configName)
 			}
 		}
 
+		std::vector<std::string> clantags;
+
 		size_t off = 0,
 			   i   = 0;
 
@@ -120,15 +128,28 @@ void LoadOrCreateConfig(const char* configName)
 			if (i == end)
 			{
 				if (i != off)
-					g_clantags.emplace_back(std::string(buffer).substr(off, i - off));
+					clantags.emplace_back(std::string(buffer).substr(off, i - off));
 				break;
 			}
 			if (buffer[i] == '\n')
 			{
-				g_clantags.emplace_back(std::string(buffer).substr(off, i - off));
+				clantags.emplace_back(std::string(buffer).substr(off, i - off));
 				off = i + 1;
 			}
 			++i;
+		}
+
+		for (const auto& tag : clantags)
+		{
+			size_t index = tag.find(':');
+			if (index)
+			{
+				clantag_t ct;
+				ct.tag  = tag.substr(0, index);
+				ct.time = std::stoul(tag.substr(index));
+
+				g_clantags.emplace_back(ct);
+			}
 		}
 	}
 }
@@ -152,13 +173,14 @@ void MainThread()
 			size_t cur = _GetTickCount();
 			if (cur > next)
 			{
-				SendClantagChanged(g_clantags[index].c_str(), g_clantags[index].c_str());
+				const auto& ct = g_clantags[index];
+
+				SendClantagChanged(ct.tag.c_str(), ct.tag.c_str());
+				next = cur + ct.time;
 
 				++index;
 				if (index >= g_clantags.size())
 					index = 0;
-
-				next = cur + 300;
 			}
 		}
 		else if (GetAsyncKeyState(VK_DELETE))

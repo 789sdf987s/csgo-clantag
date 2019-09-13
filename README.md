@@ -6,9 +6,19 @@ features:
 
 how2 change clantag:
 1. go to CSGO folder.
-2. change whats inside clantag.txt.
+2. change whats inside clantag.cfg.
 
 max. characters is 14. more than that, the rest will be ignored.
 
-if clantag.txt doesnt exist, simply create one.
+if clantag.cfg doesnt exist, simply create one.
 the file is automatically generated upon injecting.
+
+clantag.cfg format:
+`tag:time`
+```
+P:800
+PP:800
+PPH:800
+PPHU:800
+PPHUD:800
+```
