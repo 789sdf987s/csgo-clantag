@@ -1,20 +1,22 @@
-#include <stdio.h>
 #include <Windows.h>
+#include <iostream>
+#include <vector>
 #include "utils.h"
 #include "winapi.h"
-
-// dumb++
-#pragma warning (push)
-#pragma warning (disable : 6011)
 
 using SendClantagChangedFn = void(__fastcall*)(const char*, const char*);
 using Engine_IsInGameFn    = bool(__fastcall*)(void*);
 
-HMODULE g_dll         = nullptr;
-void*   g_engine      = nullptr;
-void**  g_localplayer = nullptr;
+SendClantagChangedFn SendClantagChanged = nullptr;
+Engine_IsInGameFn    Engine_IsInGame = nullptr;
 
-__forceinline void ExitCheat()
+HMODULE g_dll         = nullptr;
+byte*   g_engine      = nullptr;
+byte**  g_localplayer = nullptr;
+
+std::vector<std::string> g_clantags;
+
+void ExitCheat()
 {
 	if (g_dll)
 		_FreeLibraryAndExitThread(g_dll, 0);
@@ -22,164 +24,184 @@ __forceinline void ExitCheat()
 		_ExitThread(0);
 }
 
-DWORD __stdcall MainThread(LPVOID lpThreadParameter)
+bool IsInjectedToCSGO()
 {
-	SendClantagChangedFn SendClantagChanged = nullptr;
-	Engine_IsInGameFn    Engine_IsInGame = nullptr;
-
-	long serverbrowser_wait_time = 1200; // 120 seconds
-
 	char filename[MAX_PATH];
 	_GetModuleFileNameA(NULL, filename, MAX_PATH);
 
 	// make sure we're actually injected @ csgo
-	if (std::string(filename).find(strenc("\\steamapps\\")) == std::string::npos
-	 || std::string(filename).find(strenc("\\Counter-Strike Global Offensive\\")) == std::string::npos)
-	{
-		ExitCheat();
-	}
+	return (std::string(filename).find(strenc("\\steamapps\\")) != std::string::npos
+		 && std::string(filename).find(strenc("\\Counter-Strike Global Offensive\\")) != std::string::npos);
+}
 
+bool WaitForCSGO(DWORD waitTime)
+{
+	DWORD start = _GetTickCount();
+
+	// wait until csgo has fully loaded
 	while (!_GetModuleHandleA(charenc("serverbrowser.dll")))
 	{
-		if (serverbrowser_wait_time < 1)
-			ExitCheat();
+		if (_GetTickCount() - start > waitTime)
+			return false;
 
-		--serverbrowser_wait_time;
 		_Sleep(100);
 	}
 
-	_Sleep(100);
+	return true;
+}
 
-	const win::LDR_DATA_TABLE_ENTRY_T* clientEntry = utils::GetModuleEntry(hash("client_panorama.dll"));
-	const win::LDR_DATA_TABLE_ENTRY_T* engineEntry = utils::GetModuleEntry(hash("engine.dll"));
+bool GetConfigPath(char* path, const char* configName, size_t size)
+{
+	char filename[MAX_PATH] = { 0 };
 
-	if (!clientEntry || !engineEntry)
+	_GetModuleFileNameA(NULL, filename, MAX_PATH);
+
+	size_t count;
+	for (count = strlen(filename); count != 0; --count)
 	{
-		ExitCheat();
-	}
-
-	DWORD dwLocalPlayer   = utils::ModulePatternScan(clientEntry, charenc("8B 0D ? ? ? ? 83 FF FF 74 07"));
-	DWORD dwInterfaceList = utils::ModulePatternScan(engineEntry, charenc("8B 35 ? ? ? ? 57 85 F6 74 38 8B 7D 08"));
-
-	SendClantagChanged = (SendClantagChangedFn)utils::ModulePatternScan(engineEntry, charenc("53 56 57 8B DA 8B F9 FF"));
-
-	if (!dwLocalPlayer || !dwInterfaceList || !SendClantagChanged)
-	{
-		ExitCheat();
-	}
-
-	g_engine      = utils::GetInterface(dwInterfaceList + 2, hash("VEngineClient0"), 14);
-	g_localplayer = *(void***)(dwLocalPlayer + 2);
-
-	if(!g_engine || !g_localplayer)
-	{
-		ExitCheat();
-	}
-		
-	Engine_IsInGame = (Engine_IsInGameFn)(*(unsigned long**)g_engine)[26];
-
-	if (!Engine_IsInGame)
-	{
-		ExitCheat();
-	}
-
-	size_t pos = 0;
-	long last = strlen(filename);
-
-	for (long i = last; i >= 0; --i)
-	{
-		if (filename[i] == '\\')
+		if (filename[count] == '\\')
 		{
-			pos = i;
+			++count;
 			break;
 		}
 	}
 
-	const char clantag[14] = { "me!me!me!" };
-
-	if (pos)
+	if (count && (count + strlen(configName) <= size))
 	{
-		std::string config = std::string(filename).substr(0, pos);
-		config.assign(charenc("clantag.txt"));
+		memcpy(path, filename, count);
+		memcpy(path + count, configName, strlen(configName));
+		return true;
+	}
+	return false;
+}
 
+void LoadOrCreateConfig(const char* configName)
+{
+	char  path[MAX_PATH] = { 0 };
+	char* buffer = (char*)charenc("s\nsa\nsam\nsamp\nsampl\nsample");
+	size_t end = strlen(buffer);
+
+	if (GetConfigPath(path, configName, MAX_PATH))
+	{
 		FILE* file = nullptr;
-		fopen_s(&file, config.c_str(), "r");
+		fopen_s(&file, path, "r");
 
 		if (file)
 		{
-			char buf[14] = { 0 };
+			fseek(file, 0, SEEK_END);
+			long size = ftell(file);
+			fseek(file, 0, SEEK_SET);
 
-			fread((void*)buf, 1, 13, file);
-			fclose(file);
+			if (size > 0)
+			{
+				end = size + 1;
+				buffer = new char[end];
+				memset(buffer, 0, end);
 
-			if (strlen(buf))
-				memcpy((void*)clantag, buf, 14);
+				fread(buffer, 1, size, file);
+				fclose(file);
+			}
 		}
 		else
 		{
-			FILE* f = nullptr;
-			fopen_s(&f, config.c_str(), "w");
-			if (f)
+			fopen_s(&file, path, "w");
+			if (file)
 			{
-				fputs(clantag, f);
-				fclose(f);
+				fputs(buffer, file);
+				fclose(file);
 			}
 		}
+
+		size_t off = 0,
+			   i   = 0;
+
+		for (; ; )
+		{
+			if (i == end)
+			{
+				if (i != off)
+					g_clantags.emplace_back(std::string(buffer).substr(off, i - off));
+				break;
+			}
+			if (buffer[i] == '\n')
+			{
+				g_clantags.emplace_back(std::string(buffer).substr(off, i - off));
+				off = i + 1;
+			}
+			++i;
+		}
 	}
+}
 
-	DWORD  next  = 0;
-	size_t index = 0;
-
-	constexpr size_t ct_count = 14;
-
-	char buffer[ct_count + 1] = { 0 }; // max clantag length
-
-	size_t length = strlen(clantag);
-	size_t count  = 14 + length;
+void MainThread()
+{
+	size_t next = 0,
+	       index = 0;
 
 	for (;;)
 	{
-		if (Engine_IsInGame(g_engine) && *g_localplayer)
+		if (Engine_IsInGame(g_engine) && *g_localplayer && *(int*)(*g_localplayer + 0xF4 /*m_iTeamNum*/))
 		{
 			if (GetAsyncKeyState(VK_DELETE))
 			{
 				char empty = '\0';
 				SendClantagChanged(&empty, &empty);
-
 				ExitCheat();
 			}
 
-			if (_GetTickCount() > next)
+			size_t cur = _GetTickCount();
+			if (cur > next)
 			{
-				long amt = (ct_count - 1) - index;
+				SendClantagChanged(g_clantags[index].c_str(), g_clantags[index].c_str());
 
-				for (long i = 0; i != ct_count; ++i)
-				{
-					if (i > amt && i <= amt + length)
-						buffer[i] = clantag[i - amt - 1];
-					else
-						buffer[i] = ' ';
-				}
-
-				SendClantagChanged(buffer, clantag);
 				++index;
-
-				if (index > count)
-				{
+				if (index >= g_clantags.size())
 					index = 0;
-				}
 
-				next = _GetTickCount() + 300;
+				next = cur + 300;
 			}
 		}
-		else
-		{
-			if (GetAsyncKeyState(VK_DELETE))
-				ExitCheat();
-		}
+		else if (GetAsyncKeyState(VK_DELETE))
+			ExitCheat();
 
 		_Sleep(10);
 	}
+}
+
+DWORD __stdcall Initialize(LPVOID lpThreadParameter)
+{
+	if (!IsInjectedToCSGO())
+		ExitCheat();
+
+	if (!WaitForCSGO(120 * 1000))
+		ExitCheat();
+
+	const auto clientEntry = utils::GetModuleEntry(hash("client_panorama.dll"));
+	const auto engineEntry = utils::GetModuleEntry(hash("engine.dll"));
+
+	if (!clientEntry || !engineEntry)
+		ExitCheat();
+
+	DWORD dwLocalPlayer   = utils::ModulePatternScan(clientEntry, charenc("8B 0D ? ? ? ? 83 FF FF 74 07"));
+	DWORD dwInterfaceList = utils::ModulePatternScan(engineEntry, charenc("8B 35 ? ? ? ? 57 85 F6 74 38 8B 7D 08"));
+	SendClantagChanged    = (SendClantagChangedFn)utils::ModulePatternScan(engineEntry, charenc("53 56 57 8B DA 8B F9 FF"));
+
+	if (!dwLocalPlayer || !dwInterfaceList || !SendClantagChanged)
+		ExitCheat();
+
+	g_engine      =  (byte*)utils::GetInterface(dwInterfaceList + 2, hash("VEngineClient0"), 14);
+	g_localplayer = *(byte***)(dwLocalPlayer + 2);
+
+	if(!g_engine || !g_localplayer)
+		ExitCheat();
+		
+	Engine_IsInGame = (Engine_IsInGameFn)(*(unsigned long**)g_engine)[26];
+
+	if (!Engine_IsInGame)
+		ExitCheat();
+
+	LoadOrCreateConfig(charenc("clantag.cfg"));
+	MainThread();
 
 	return NULL;
 }
@@ -192,13 +214,8 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 		{
 			_DisableThreadLibraryCalls(hinstDLL);
 			g_dll = hinstDLL;
-
 		}
-
-		_CreateThread(NULL, 0, MainThread, nullptr, 0, nullptr);
+		_CreateThread(NULL, 0, Initialize, nullptr, 0, nullptr);
 	}
-
 	return TRUE;
 }
-
-#pragma warning (pop)
