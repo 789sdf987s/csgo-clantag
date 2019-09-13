@@ -84,7 +84,7 @@ bool GetConfigPath(char* path, const char* configName, size_t size)
 void LoadOrCreateConfig(const char* configName)
 {
 	char  path[MAX_PATH] = { 0 };
-	char* buffer = (char*)charenc("s\nsa\nsam\nsamp\nsampl\nsample");
+	char* buffer = (char*)charenc(":300\ns:300\nsa:300\nsam:300\nsamp:300\nsampl:300\nsample:300");
 	size_t end = strlen(buffer);
 
 	if (GetConfigPath(path, configName, MAX_PATH))
