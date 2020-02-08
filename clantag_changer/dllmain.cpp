@@ -141,7 +141,7 @@ void LoadOrCreateConfig(const char* configName)
 
 		for (const auto& tag : clantags)
 		{
-			size_t index = tag.find(':');
+			size_t index = tag.find_last_of(':');
 			if (index != tag.length())
 			{
 				clantag_t ct;
